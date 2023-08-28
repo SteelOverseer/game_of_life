@@ -1,4 +1,6 @@
-use leptos::*;
+use std::{thread, time};
+
+use leptos::{*, html::Input, ev::SubmitEvent, svg::view, leptos_dom::console_log};
 
 #[derive(Debug, Clone, Copy)]
 struct Cell {
@@ -7,43 +9,64 @@ struct Cell {
 
 #[component]
 fn App(cx: Scope) -> impl IntoView {
-    let (count, set_count) = create_signal(cx, 0);
+	let (rows, set_rows) = create_signal(cx, 5);
+	let (columns, set_columns) = create_signal(cx, 5);
+	
+	// create the grid
+	let (grid, set_grid) = create_signal(cx, vec![vec![Cell { alive: false }; columns.get()]; rows.get()]);
+	
+	// set the initial state of the grid (blinker)
+	set_grid.update(|grid|{
+		grid[1][2].alive = true
+	});
+	set_grid.update(|grid|{
+		grid[2][2].alive = true
+	});
+	set_grid.update(|grid|{
+		grid[3][2].alive = true
+	});
 
+	view! { cx,
+		<Grid grid=grid />
+	}
+}
+
+#[component]
+fn Grid(cx: Scope, grid: ReadSignal<Vec<Vec<Cell>>>) -> impl IntoView {
+    let rows = grid.get().len();
+    let columns = grid.get()[0].len();
     view! { cx,
-        // <button
-        //     on:click=move |_| {
-        //         set_count.update(|n| *n += 1);
-        //     }
-        //     class:red=move || count.get() % 2 == 1
-        // >
-        //     "Click me: "
-        //     {move || count.get()}
-        // </button>
-        // <progress max="50" />
-        <table>  
-        <thead>header</thead>
-            <tbody>
-            <tr>
-                <td>test</td>  
-                <td>test 2 </td>          
-            </tr>
-            </tbody>
-        </table>
-    }
+        {(0..rows)
+            .into_iter()
+            .map(|x| {
+                view! { cx,
+                    <div class="row">
+                        {(0..columns)
+                            .into_iter()
+                            .map(|y| {
+                                view! { cx, <div class="cell" class:alive = grid.get()[x][y].alive></div> }
+                            })
+                            .collect::<Vec<_>>()}
+                    </div>
+                }
+            })
+            .collect::<Vec<_>>()
+		}
+	}
 }
 
 // function to compute the next generation
-fn create_next_generation(grid: &Vec<Vec<Cell>>) -> Vec<Vec<Cell>> {
-    let rows = grid.len();
-    let cols = grid[0].len();
-
+fn create_next_generation(cx: Scope, grid: &ReadSignal<Vec<Vec<Cell>>>) -> ReadSignal<Vec<Vec<Cell>>> {
+    let rows = grid.get().len();
+    let cols = grid.get()[0].len();
+    
     // create an empty grid to compute the future generation
-    let mut future: Vec<Vec<Cell>> = vec![vec![Cell{alive: false}; rows]; cols];
+	let (future_grid, set_grid) = create_signal(cx, vec![vec![Cell { alive: false }; cols]; rows]);
 
     for i in 0..rows {
         for j in 0..cols {
 
-            let cell_state = grid[i][j].alive;
+            let cell_state = grid.get()[i][j].alive;
 
             let mut live_neighbors = 0;
 
@@ -57,7 +80,7 @@ fn create_next_generation(grid: &Vec<Vec<Cell>>) -> Vec<Vec<Cell>> {
 
                     // make sure the position is within the bounds of the grid
                     if new_x > 0 && new_y > 0 && new_x < rows as i8 && new_y < cols as i8 {
-                        let neighbor_cell = grid[new_x as usize][new_y as usize];
+                        let neighbor_cell = grid.get()[new_x as usize][new_y as usize];
                         if neighbor_cell.alive {
                             live_neighbors += 1;
                         }
@@ -72,55 +95,33 @@ fn create_next_generation(grid: &Vec<Vec<Cell>>) -> Vec<Vec<Cell>> {
 
             // applying the rules of game of life to get the future generation
             if cell_state && live_neighbors < 2 { // under population
-                future[i][j].alive = false;
+				set_grid.update(|grid|{
+					grid[i][j].alive = false;
+				});
             } else if cell_state && (live_neighbors == 2 || live_neighbors == 3) { // live on
-                future[i][j].alive = true;
+				set_grid.update(|grid|{
+					grid[i][j].alive = true;
+				});
             } else if cell_state && live_neighbors > 3 { // over populations
-                future[i][j].alive = false;
+				set_grid.update(|grid|{
+					grid[i][j].alive = false;
+				});
             } else if !cell_state && live_neighbors == 3 { // reproduction
-                future[i][j].alive = true;
+				set_grid.update(|grid|{
+					grid[i][j].alive = true;
+				});
             } else {
-                future[i][j].alive = cell_state;
+				set_grid.update(|grid|{
+					grid[i][j].alive = cell_state;
+				});
             }
         }
     }
 
     // return the future generation
-    future
+    return future_grid;
 }
 
 fn main() {
-    let (rows, cols) = (5, 5);
-
-    // create the grid
-    let mut grid: Vec<Vec<Cell>> = vec![vec![Cell { alive: false }; cols]; rows];
-
-    // set the initial state of the grid (blinker)
-    grid[1][2].alive = true;
-    grid[2][2].alive = true;
-    grid[3][2].alive = true;
-
-    // print the initial state of the grid;
-    println!("Initial grid:");
-    grid.iter().for_each(|i| {
-        println!("{:?}", i);
-    });
-
-    println!("");
-
-    // Number of generations
-    const ITR: u8 = 5;
-
-    // compute and print the next generation
-    for i in 0..ITR {
-        grid = create_next_generation(&grid);
-
-        println!("Generation {}:", i+1);
-        grid.iter().for_each(|i| {
-            println!("{:?}", i);
-        });
-        println!("");
-    }
-
-    // leptos::mount_to_body(|cx| view! { cx, <App/> })
+    leptos::mount_to_body(|cx| view! { cx, <App /> })
 }

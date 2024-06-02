@@ -1,6 +1,5 @@
-use std::{thread, time};
 
-use leptos::{*, html::Input, ev::SubmitEvent, svg::view, leptos_dom::console_log};
+use leptos::*;
 
 #[derive(Debug, Clone, Copy)]
 struct Cell {
@@ -8,12 +7,13 @@ struct Cell {
 }
 
 #[component]
-fn App(cx: Scope) -> impl IntoView {
-	let (rows, set_rows) = create_signal(cx, 5);
-	let (columns, set_columns) = create_signal(cx, 5);
+fn App() -> impl IntoView {
+	let (rows, set_rows) = create_signal(5);
+	let (columns, set_columns) = create_signal(5);
 	
 	// create the grid
-	let (grid, set_grid) = create_signal(cx, vec![vec![Cell { alive: false }; columns.get()]; rows.get()]);
+	let test = move || create_signal(vec![vec![Cell { alive: false }; columns.get()]; (move || rows())()]);
+    let (grid, set_grid) = test();
 	
 	// set the initial state of the grid (blinker)
 	set_grid.update(|grid|{
@@ -25,28 +25,59 @@ fn App(cx: Scope) -> impl IntoView {
 	set_grid.update(|grid|{
 		grid[3][2].alive = true
 	});
-
-	view! { cx,
-		<Grid grid=grid />
-	}
+   
+    view! {
+        <label>
+            "Number Rows: "
+            <input type="number"
+                on:input=move |ev| {
+                    set_rows(event_target_value(&ev).parse::<usize>().unwrap());
+                }
+                prop:value=rows
+            />
+        </label>
+        "rows: " {rows}
+        <label>
+            "Number Columns: "
+            <input type="number"
+                on:input=move |ev| {
+                    set_columns(event_target_value(&ev).parse::<usize>().unwrap());
+                }
+                prop:value=columns
+            />
+        </label>
+        
+        <button
+            on:click=move |_| {
+                set_grid.set(create_next_generation(&grid).get());
+            }
+        >
+            "Create next generation"
+        </button>
+        
+        <Grid grid=grid />
+    }
 }
 
 #[component]
-fn Grid(cx: Scope, grid: ReadSignal<Vec<Vec<Cell>>>) -> impl IntoView {
-    let rows = grid.get().len();
-    let columns = grid.get()[0].len();
-    view! { cx,
-        {(0..rows)
+fn Grid(grid: ReadSignal<Vec<Vec<Cell>>>) -> impl IntoView {
+    let rows = move || grid.get().len();
+    let columns = move || grid.get()[0].len();
+    
+    view! {
+        {(0..rows())
             .into_iter()
             .map(|x| {
-                view! { cx,
+                view! {
                     <div class="row">
-                        {(0..columns)
+                        {
+                            (0..columns())
                             .into_iter()
                             .map(|y| {
-                                view! { cx, <div class="cell" class:alive = grid.get()[x][y].alive></div> }
+                                view! { <div class="cell" class:alive = move || grid.get()[x][y].alive></div> }
                             })
-                            .collect::<Vec<_>>()}
+                            .collect::<Vec<_>>()
+                        }
                     </div>
                 }
             })
@@ -56,12 +87,12 @@ fn Grid(cx: Scope, grid: ReadSignal<Vec<Vec<Cell>>>) -> impl IntoView {
 }
 
 // function to compute the next generation
-fn create_next_generation(cx: Scope, grid: &ReadSignal<Vec<Vec<Cell>>>) -> ReadSignal<Vec<Vec<Cell>>> {
+fn create_next_generation(grid: &ReadSignal<Vec<Vec<Cell>>>) -> ReadSignal<Vec<Vec<Cell>>> {
     let rows = grid.get().len();
     let cols = grid.get()[0].len();
     
     // create an empty grid to compute the future generation
-	let (future_grid, set_grid) = create_signal(cx, vec![vec![Cell { alive: false }; cols]; rows]);
+	let (future_grid, set_grid) = create_signal( vec![vec![Cell { alive: false }; cols]; rows]);
 
     for i in 0..rows {
         for j in 0..cols {
@@ -123,5 +154,6 @@ fn create_next_generation(cx: Scope, grid: &ReadSignal<Vec<Vec<Cell>>>) -> ReadS
 }
 
 fn main() {
-    leptos::mount_to_body(|cx| view! { cx, <App /> })
+    console_error_panic_hook::set_once();
+    leptos::mount_to_body(|| view! { <App /> })
 }
